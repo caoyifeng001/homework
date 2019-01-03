@@ -8,7 +8,7 @@
 /**
  * Increments all the grid cells from (x0, y0) to (x1, y1);
  * //不包含(x1,y1)
- * 2D画线算法　来进行计算两个点之间的grid cell
+ * 2D画线算法　来进行计算两个点之间的grid cell 像素
  * @param x0
  * @param y0
  * @param x1
@@ -110,13 +110,13 @@ void SetMapParams(void )
 }
 
 
-//从世界坐标系转换到栅格坐标系
+//从世界坐标系转换到栅格坐标系  > 0 
 GridIndex ConvertWorld2GridIndex(double x,double y)
 {
     GridIndex index;
 
-    index.x = std::ceil((x - mapParams.origin_x) / mapParams.resolution) + mapParams.offset_x;
-    index.y = std::ceil((y - mapParams.origin_y) / mapParams.resolution) + mapParams.offset_y;
+    index.x = std::ceil((x - mapParams.origin_x) / mapParams.resolution) + mapParams.offset_x;  //std::ceil向上取整数
+    index.y = std::ceil((y - mapParams.origin_y) / mapParams.resolution) + mapParams.offset_y; //std::ceil(5.88)   = 6
 
     return index;
 }
@@ -176,9 +176,35 @@ void OccupanyMapping(std::vector<GeneralLaserScan>& scans,std::vector<Eigen::Vec
             double world_y = laser_y + robotPose(1);
 
             //TODO start of TODO
+            GridIndex mapIndex = ConvertWorld2GridIndex(world_x,world_y);
+            if(isValidGridIndex(mapIndex) == false) continue;
+            if(isValidGridIndex(robotIndex) == false)
+            {
+                std::cout<<"Error, this should not happen"<<std::endl;
+                continue;
+            }
+           std::vector<GridIndex> freeIndex = TraceLine(robotIndex.x,robotIndex.y,mapIndex.x,mapIndex.y);
+            for(int k=0;k<freeIndex.size();k++)
+            {
+                GridIndex tmpIndex = freeIndex[k];
+                int linearIndex = GridIndexToLinearIndex(tmpIndex);
+                int data =pMap[linearIndex];
+                data += mapParams.log_free;
+                if(data<0)
+                    data = 0;
+                pMap[linearIndex]=data; 
+            }
+            int tmpIndex = GridIndexToLinearIndex(mapIndex);
+            int data = pMap[tmpIndex];
+            data += mapParams.log_occ;
+            if(data>100)
+                data = 100;
+            pMap[tmpIndex] = data;
+            
             //TODO end of TODO
         }
     }
+    std::cout<<"over ." <<std::endl;
 }
 
 
@@ -202,9 +228,7 @@ void PublishMap(ros::Publisher& map_pub)
     rosMap.info.height = mapParams.height;
     rosMap.data.resize(rosMap.info.width * rosMap.info.height);
 
-    //0~100
-    int cnt0,cnt1,cnt2;
-    cnt0 = cnt1 = cnt2 = 100;
+  
     for(int i = 0; i < mapParams.width * mapParams.height;i++)
     {
        if(pMap[i] == 50)
@@ -214,7 +238,7 @@ void PublishMap(ros::Publisher& map_pub)
        else
        {
 
-           rosMap.data[i] = pMap[i];
+           rosMap.data[i] = pMap[i];   //map : 100 occ ; 0 frees
        }
     }
 
@@ -235,22 +259,22 @@ int main(int argc, char** argv)
     std::vector<Eigen::Vector3d> robotPoses;
     std::vector<GeneralLaserScan> generalLaserScans;
 
-    std::string basePath = "/home/eventec/OccupanyMappingProject/src/occupany_mapping/data";
+    std::string basePath = "/home/cbin/homework/src/occupany_mapping/data";
 
     std::string posePath= basePath + "/pose.txt";
     std::string anglePath = basePath + "/scanAngles.txt";
     std::string scanPath = basePath + "/ranges.txt";
 
     //读取数据
-    ReadPoseInformation(posePath,robotPoses);
+    ReadPoseInformation(posePath,robotPoses);   //x,y,theta
 
     ReadLaserScanInformation(anglePath,
                              scanPath,
-                             generalLaserScans);
+                             generalLaserScans);    //雷达信息
 
     //设置地图信息
     SetMapParams();
-
+   
     OccupanyMapping(generalLaserScans,robotPoses);
 
     PublishMap(mapPub);
