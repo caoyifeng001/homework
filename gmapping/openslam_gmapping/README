@@ -35,6 +35,20 @@ It includes a few patches that could be pushed upstream if needed
 
 下一步的优化准确在激光数据中提取直线，然后把这些直线上的激光点通过线性插值重新排列，以此来去除激光点的噪声造成的建图出来的墙壁比较厚的缺点。
 
+laserCallback ->
 
 
+    slam_gmapping.cpp addScan ->
 
+
+        gridslamprocessor.cpp GridSlamProcessor::processScan->   重要函数
+
+
+            GridSlamProcessor.hxx (GridSlamProcessor.h) scanMatch ->
+
+
+                scanmatcher.cpp optimize
+
+                scanmatcher.cpp likelihood
+            
+            GridSlamProcessor.hxx resample
