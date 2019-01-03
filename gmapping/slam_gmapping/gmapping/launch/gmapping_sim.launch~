@@ -59,6 +59,6 @@
   </node>
 
   <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find gmapping)/rviz/gmapping.rviz" />
-  <node pkg="rosbag" type="play" name="playe" output="screen" args="--clock /home/cbin/homework/src/gmapping/bag/gmapping.bag"/>  
+    <node pkg="rosbag" type="play" name="playe" output="screen" args="--clock /home/cbin/homework/src/gmapping/bag/gmapping.bag"/>  
 
 </launch>

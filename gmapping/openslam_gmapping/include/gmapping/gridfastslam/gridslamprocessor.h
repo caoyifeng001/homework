@@ -418,69 +418,69 @@ typedef std::multimap<const GridSlamProcessor::TNode*, GridSlamProcessor::TNode*
   这个函数实现的scan-match方法是cyrill stachniss在07年提出的论文里面的方法。
   理论上来说这个方法比GMapping的原来的那个方法好一些 但实际上好像差不多。
   */
-//  inline void GridSlamProcessor::scanMatch(const double* plainReading)
-//  {
-//    // sample a new pose from each scan in the reference
-//    /*每个粒子都要进行scan-match*/
-//    double sumScore=0;
-//    int particle_number = m_particles.size();
+ inline void GridSlamProcessor::scanMatch(const double* plainReading)
+ {
+   // sample a new pose from each scan in the reference
+   /*每个粒子都要进行scan-match*/
+   double sumScore=0;
+   int particle_number = m_particles.size();
 
-//    //用openMP的方式来进行并行化，因此这里不能用迭代器 只能用下标的方式进行访问
-//    //并行话之后会把里面的循环均匀的分到各个不同的核里面去。
-//  #pragma omp parallel for
-//    for (int i = 0; i < particle_number;i++)
-//    {
-//      OrientedPoint corrected;
-//      ScanMatcher::CovarianceMatrix cov;
-//      double score, l;
+   //用openMP的方式来进行并行化，因此这里不能用迭代器 只能用下标的方式进行访问
+   //并行话之后会把里面的循环均匀的分到各个不同的核里面去。
+ #pragma omp parallel for
+   for (int i = 0; i < particle_number;i++)
+   {
+     OrientedPoint corrected;
+     ScanMatcher::CovarianceMatrix cov;
+     double score, l;
 
-//      //进行完scan-match之后 不是直接用最优的位姿 而是假设高斯分布然后计算加权和 这个是论文里面提出来的方法
-//      score = m_matcher.optimize(corrected,cov,m_particles[i].map,m_particles[i].pose,plainReading);
+     //进行完scan-match之后 不是直接用最优的位姿 而是假设高斯分布然后计算加权和 这个是论文里面提出来的方法
+     score = m_matcher.optimize(corrected,cov,m_particles[i].map,m_particles[i].pose,plainReading);
 
-//      /*矫正成功则更新位姿*/
-//      if (score>m_minimumScore)
-//      {
-//        m_particles[i].pose = corrected;
-//      }
-//      /*扫描匹配不上 则使用里程计的数据 使用里程计数据不进行更新  因为在进行扫描匹配之前 里程计已经更新过了*/
-//      else
-//      {
-//          //输出信息 这个在并行模式下可以会出现错位
-//          if (m_infoStream)
-//          {
-//              m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
-//              m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
-//              m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
-//          }
-//      }
+     /*矫正成功则更新位姿*/
+     if (score>m_minimumScore)
+     {
+       m_particles[i].pose = corrected;
+     }
+     /*扫描匹配不上 则使用里程计的数据 使用里程计数据不进行更新  因为在进行扫描匹配之前 里程计已经更新过了*/
+     else
+     {
+         //输出信息 这个在并行模式下可以会出现错位
+         if (m_infoStream)
+         {
+             m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
+             m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
+             m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
+         }
+     }
 
-//      //粒子的最优位姿计算了之后，重新计算粒子的权重(相当于粒子滤波器中的观测步骤，计算p(z|x,m))，粒子的权重由粒子的似然来表示。
-//      /*
-//       * 计算粒子的得分和权重(似然)   注意粒子的权重经过ScanMatch之后已经更新了
-//       * 在论文中 例子的权重不是用最有位姿的似然值来表示的。
-//       * 是用所有的似然值的和来表示的。
-//       */
-//      //这个计算权重的方法来时Cyrill Stachniss在论文中提到的方法。
-//      OrientedPoint mean;
-//      double w = m_matcher.likelihood(l,mean,cov,m_particles[i].map,m_particles[i].pose,plainReading);
-//      l = w;
+     //粒子的最优位姿计算了之后，重新计算粒子的权重(相当于粒子滤波器中的观测步骤，计算p(z|x,m))，粒子的权重由粒子的似然来表示。
+     /*
+      * 计算粒子的得分和权重(似然)   注意粒子的权重经过ScanMatch之后已经更新了
+      * 在论文中 例子的权重不是用最有位姿的似然值来表示的。
+      * 是用所有的似然值的和来表示的。
+      */
+     //这个计算权重的方法来时Cyrill Stachniss在论文中提到的方法。
+     OrientedPoint mean;
+     double w = m_matcher.likelihood(l,mean,cov,m_particles[i].map,m_particles[i].pose,plainReading);
+     l = w;
 
-//      sumScore+=score;
-//      m_particles[i].weight+=l;
-//      m_particles[i].weightSum+=l;
+     sumScore+=score;
+     m_particles[i].weight+=l;
+     m_particles[i].weightSum+=l;
 
-//      //set up the selective copy of the active area
-//      //by detaching the areas that will be updated
-//      /*计算出来最优的位姿之后，进行地图的扩充  这里不会进行内存分配
-//       *不进行内存分配的原因是这些粒子进行重采样之后有可能会消失掉，因此在后面进行冲采样的时候统一进行内存分配。
-//       *理论上来说，这里的操作是没有必要的，因为后面的重采样的时候还会进行一遍
-//       */
-//      //m_matcher.invalidateActiveArea();
-//      //m_matcher.computeActiveArea(m_particles[i].map, m_particles[i].pose, plainReading);
-//    }
-//    if (m_infoStream)
-//      m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;
-//  }
+     //set up the selective copy of the active area
+     //by detaching the areas that will be updated
+     /*计算出来最优的位姿之后，进行地图的扩充  这里不会进行内存分配
+      *不进行内存分配的原因是这些粒子进行重采样之后有可能会消失掉，因此在后面进行冲采样的时候统一进行内存分配。
+      *理论上来说，这里的操作是没有必要的，因为后面的重采样的时候还会进行一遍
+      */
+     //m_matcher.invalidateActiveArea();
+     //m_matcher.computeActiveArea(m_particles[i].map, m_particles[i].pose, plainReading);
+   }
+   if (m_infoStream)
+     m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;
+ }
 
 
 //上面定义的三个内联函数在这个头文件里面实现
