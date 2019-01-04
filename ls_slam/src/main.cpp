@@ -120,18 +120,18 @@ int main(int argc, char **argv)
     afterGraphPub  = nodeHandle.advertise<visualization_msgs::MarkerArray>("afterPoseGraph",1,true);
 
 
-    std::string VertexPath = "/home/eventec/LSSLAMProject/src/ls_slam/data/test_quadrat-v.dat";
-    std::string EdgePath = "/home/eventec/LSSLAMProject/src/ls_slam/data/test_quadrat-e.dat";
+    // std::string VertexPath = "/home/cbin/homework/src/ls_slam/data/test_quadrat-v.dat";
+    // std::string EdgePath = "/home/cbin/homework/src/ls_slam/data/test_quadrat-e.dat";
 
-//    std::string VertexPath = "/home/eventec/LSSLAMProject/src/ls_slam/data/intel-v.dat";
-//    std::string EdgePath = "/home/eventec/LSSLAMProject/src/ls_slam/data/intel-e.dat";
+   std::string VertexPath = "/home/cbin/homework/src/ls_slam/data/intel-v.dat";
+   std::string EdgePath = "/home/cbin/homework/src/ls_slam/data/intel-e.dat";
 
     std::vector<Eigen::Vector3d> Vertexs;
     std::vector<Edge> Edges;
-
+    
     ReadVertexInformation(VertexPath,Vertexs);
     ReadEdgesInformation(EdgePath,Edges);
-
+    std::cout<<"Vertexs size:"<<Vertexs.size()<<" Edges size : "<<Edges.size()<<std::endl;
     PublishGraphForVisulization(&beforeGraphPub,
                                 Vertexs,
                                 Edges);
@@ -149,8 +149,21 @@ int main(int argc, char **argv)
 
         //进行更新
         //TODO--Start
-        //TODO--End
+        for(int k = 0;k<Vertexs.size();k++)
+        {
+            Vertexs[k](0) += dx(3*k + 0);
+            Vertexs[k](1) += dx(3*k + 1);
+            Vertexs[k](2) += dx(3*k + 2);
 
+
+            //theta 限制在 -pi～pi
+            if(Vertexs[k](2) > 3.1415926)
+                Vertexs[k](2) -=2*3.1415926;
+            if(Vertexs[k](2) < -3.1415926)
+                Vertexs[k](2) +=2*3.1415926;
+        }
+        //TODO--End
+    
         double maxError = -1;
         for(int k = 0; k < 3 * Vertexs.size();k++)
         {
@@ -163,7 +176,6 @@ int main(int argc, char **argv)
         if(maxError < epsilon)
             break;
     }
-
 
     double finalError  = ComputeError(Vertexs,Edges);
 

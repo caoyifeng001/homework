@@ -73,6 +73,36 @@ void CalcJacobianAndError(Eigen::Vector3d xi,Eigen::Vector3d xj,Eigen::Vector3d 
                           Eigen::Vector3d& ei,Eigen::Matrix3d& Ai,Eigen::Matrix3d& Bi)
 {
     //TODO--Start
+    Eigen::Matrix3d Xi = PoseToTrans(xi);
+    Eigen::Matrix3d Xj = PoseToTrans(xj);
+    Eigen::Matrix3d Z = PoseToTrans(z);
+
+    Eigen::Matrix3d Ei = Z.inverse() * Xi.inverse() * Xj;
+
+    ei = TransToPose(Ei);
+
+    Eigen::Matrix2d Rxi = Xi.block(0,0,2,2);
+    Eigen::Matrix2d Rij = Z.block(0,0,2,2);   
+
+    Eigen::Vector2d ti,tj;
+    ti<<xi(0),xi(1);
+    tj<<xj(0),xj(1);
+
+    double theta = xi(2);
+
+    Eigen::Matrix2d dRxi;
+    dRxi<<-sin(theta),cos(theta),-cos(theta),-sin(theta);
+
+    //jacobian
+    Ai.setZero();
+
+    Ai.block(0,0,2,2) = -Rij.transpose() * Rxi.transpose();
+    Ai.block(0,2,2,1) = -Rij.transpose() * dRxi * (tj - ti);
+    Ai(2,2) = -1;
+
+    Bi.setZero();
+    Bi.block(0,0,2,2) = Rij.transpose() * Rxi.transpose();
+    Bi(2,2) = -1;
     //TODO--end
 }
 
@@ -115,14 +145,39 @@ Eigen::VectorXd  LinearizeAndSolve(std::vector<Eigen::Vector3d>& Vertexs,
         CalcJacobianAndError(xi,xj,z,ei,Ai,Bi);
 
          //TODO--Start
+         Eigen::Matrix3d Hii,Hij,Hji,Hjj;
+        Hii = Ai.transpose() * infoMatrix * Ai;
+        Hij = Ai.transpose() * infoMatrix * Bi;
+        Hji = Bi.transpose() * infoMatrix * Ai;
+        Hjj = Bi.transpose() * infoMatrix * Bi;
+
+        int idx = tmpEdge.xi;
+        int jdx = tmpEdge.xj;
+
+        H.block(3*idx,3*idx,3,3) += Hii;
+        H.block(3*idx,3*jdx,3,3) += Hij;
+        H.block(3*jdx,3*idx,3,3) += Hji;
+        H.block(3*jdx,3*jdx,3,3) += Hjj;
+
+        Eigen::Vector3d bi,bj;
+        bi = (ei.transpose() * infoMatrix * Ai).transpose();
+        bj = (ei.transpose() * infoMatrix * Bi).transpose();
+
+        b(3*idx) += bi(0);
+        b(3*idx+1) += bi(1);
+        b(3*idx+2) += bi(2);
+
+        b(3*jdx) += bj(0);
+        b(3*jdx+1) += bj(1);
+        b(3*jdx+2) += bj(2);
         //TODO--End
     }
 
     //求解
-    Eigen::VectorXd dx;
+
 
     //TODO--Start
-
+    Eigen::VectorXd dx = -H.lu().solve(b);
     //TODO-End
 
     return dx;
