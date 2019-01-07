@@ -5,6 +5,8 @@
 
 #include <sensor_msgs/LaserScan.h>
 
+#include <champion_nav_msgs/ChampionNavLaserScan.h>
+
 #include <pcl-1.7/pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl-1.7/pcl/visualization/cloud_viewer.h>
@@ -23,7 +25,7 @@ public:
     LidarMotionCalibrator(tf::TransformListener* tf)
     {
         tf_ = tf;
-        scan_sub_ = nh_.subscribe("rplidar_scan", 10, &LidarMotionCalibrator::ScanCallBack, this);
+        scan_sub_ = nh_.subscribe("champion_scan", 10, &LidarMotionCalibrator::ScanCallBack, this);
     }
 
 
@@ -34,13 +36,13 @@ public:
     }
 
     // 拿到原始的激光数据来进行处理
-    void ScanCallBack(const sensor_msgs::LaserScanConstPtr& scan_msg)
+    void ScanCallBack(const champion_nav_msgs::ChampionNavLaserScanPtr& scan_msg)
     {
         //转换到矫正需要的数据
         ros::Time startTime, endTime;
         startTime = scan_msg->header.stamp;
 
-        sensor_msgs::LaserScan laserScanMsg = *scan_msg;
+        champion_nav_msgs::ChampionNavLaserScan laserScanMsg = *scan_msg;
 
         //得到最终点的时间
         int beamNum = laserScanMsg.ranges.size();
@@ -48,16 +50,29 @@ public:
 
         // 将数据复制出来
         std::vector<double> angles,ranges;
-        for(int i = 0; i < beamNum;i++)
-        {
+        for(int i = beamNum - 1; i > 0;i--)
+        {   
             double lidar_dist = laserScanMsg.ranges[i];
-            double lidar_angle = laserScanMsg.angle_min + laserScanMsg.angle_increment * i;
+            double lidar_angle = laserScanMsg.angles[i];
+
+            if(lidar_dist < 0.05 || std::isnan(lidar_dist) || std::isinf(lidar_dist))
+                lidar_dist = 0.0;
 
             ranges.push_back(lidar_dist);
             angles.push_back(lidar_angle);
         }
 
         //转换为pcl::pointcloud for visuailization
+
+        tf::Stamped<tf::Pose> visualPose;
+        if(!getLaserPose(visualPose, startTime, tf_))
+        {
+
+            ROS_WARN("Not visualPose,Can not Calib");
+            return ;
+        }
+
+        double visualYaw = tf::getYaw(visualPose.getRotation());
 
         visual_cloud_.clear();
         for(int i = 0; i < ranges.size();i++)
@@ -66,10 +81,12 @@ public:
             if(ranges[i] < 0.05 || std::isnan(ranges[i]) || std::isinf(ranges[i]))
                 continue;
 
+            double x = ranges[i] * cos(angles[i]);
+            double y = ranges[i] * sin(angles[i]);
 
             pcl::PointXYZRGB pt;
-            pt.x = ranges[i] * cos(angles[i]);
-            pt.y = ranges[i] * sin(angles[i]);
+            pt.x = x * cos(visualYaw) - y * sin(visualYaw) + visualPose.getOrigin().getX();
+            pt.y = x * sin(visualYaw) + y * cos(visualYaw) + visualPose.getOrigin().getY();
             pt.z = 1.0;
 
             // pack r/g/b into rgb
@@ -79,7 +96,8 @@ public:
 
             visual_cloud_.push_back(pt);
         }
-        std::cout << std::endl;
+       // std::cout << std::endl;
+
 
 
         //进行矫正
@@ -95,21 +113,21 @@ public:
             if(ranges[i] < 0.05 || std::isnan(ranges[i]) || std::isinf(ranges[i]))
                 continue;
 
+            double x = ranges[i] * cos(angles[i]);
+            double y = ranges[i] * sin(angles[i]);
+
+
             pcl::PointXYZRGB pt;
-            pt.x = ranges[i] * cos(angles[i]);
-            pt.y = ranges[i] * sin(angles[i]);
+            pt.x = x * cos(visualYaw) - y * sin(visualYaw) + visualPose.getOrigin().getX();
+            pt.y = x * sin(visualYaw) + y * cos(visualYaw) + visualPose.getOrigin().getY();
             pt.z = 1.0;
 
-            unsigned char r = 0, g = 255, b = 0;    // blue color
+            unsigned char r = 0, g = 255, b = 0;    // green color
             unsigned int rgb = ((unsigned int)r << 16 | (unsigned int)g << 8 | (unsigned int)b);
             pt.rgb = *reinterpret_cast<float*>(&rgb);
 
             visual_cloud_.push_back(pt);
         }
-
-        std::cout <<std::endl<<std::endl;
-
-
 
         //进行显示
          g_PointCloudView.showCloud(visual_cloud_.makeShared());
@@ -186,7 +204,8 @@ public:
             int startIndex,
             int& beam_number)
     {
-        //每个位姿进行线性插值时的步长
+       //TODO
+       //每个位姿进行线性插值时的步长
         double beam_step = 1.0 / (beam_number-1);
 
         //机器人的起始角度 和 最终角度
@@ -295,6 +314,7 @@ public:
                 angles[startIndex+i] = lidar_angle;
             }
         }
+       //end of TODO
     }
 
 
@@ -417,5 +437,4 @@ int main(int argc,char ** argv)
     ros::spin();
     return 0;
 }
-
 

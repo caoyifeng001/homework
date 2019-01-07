@@ -1,4 +1,5 @@
 <launch>
    <param name="use_sim_time" value="true"/>
    <node name="LaserUndistortion_Node" pkg="LaserUndistortion"  type="LaserUndistortion_node" output="screen" />
+    <node pkg="rosbag" type="play" name="playe"  output="screen" args="--clock $(find LaserUndistortion)/bag/laser.bag"/> 
 </launch>
